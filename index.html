@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>速海楼仓库管理系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+    .header { background: #24292e; color: white; padding: 1rem 2rem; }
+    .header h1 { font-size: 1.5rem; }
+    .nav { background: #fff; padding: 1rem 2rem; border-bottom: 1px solid #e1e4e8; }
+    .nav button { padding: 0.5rem 1rem; margin-right: 0.5rem; border: none; background: #0366d6; color: white; border-radius: 4px; cursor: pointer; }
+    .nav button:hover { background: #0256c7; }
+    .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+    .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid #d1d5da; border-radius: 4px; }
+    .btn-primary { padding: 0.75rem 1.5rem; background: #2ea44f; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
+    .btn-primary:hover { background: #2c974b; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e1e4e8; }
+    th { background: #f6f8fa; font-weight: 600; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .stat-card { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stat-card h3 { font-size: 0.875rem; color: #586069; margin-bottom: 0.5rem; }
+    .stat-card .number { font-size: 1.5rem; font-weight: 600; color: #24292e; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>速海楼仓库管理系统</h1>
+  </header>
+  
+  <nav class="nav">
+    <button onclick="showSection('dashboard')">仪表盘</button>
+    <button onclick="showSection('inbound')">入库</button>
+    <button onclick="showSection('outbound')">出库</button>
+    <button onclick="showSection('inventory')">库存</button>
+  </nav>
+
+  <div class="container">
+    <section id="dashboard" class="card">
+      <h2>仪表盘</h2>
+      <div class="stats">
+        <div class="stat-card"><h3>总库存</h3><div class="number" id="total-items">0</div></div>
+        <div class="stat-card"><h3>今日入库</h3><div class="number" id="today-in">0</div></div>
+        <div class="stat-card"><h3>今日出库</h3><div class="number" id="today-out">0</div></div>
+        <div class="stat-card"><h3>低库存预警</h3><div class="number" id="low-stock">0</div></div>
+      </div>
+    </section>
+
+    <section id="inbound" class="card" style="display:none">
+      <h2>物品入库</h2>
+      <form id="inbound-form">
+        <div class="form-group"><label>物品名称</label><input type="text" id="in-name" required></div>
+        <div class="form-group"><label>物品编号</label><input type="text" id="in-code" placeholder="如 SP-001" required></div>
+        <div class="form-group"><label>分类</label><select id="in-category"><option>电子产品</option><option>办公用品</option><option>食品饮料</option><option>工具设备</option><option>其他</option></select></div>
+        <div class="form-group"><label>入库数量</label><input type="number" id="in-quantity" required min="1"></div>
+        <div class="form-group"><label>单位</label><select id="in-unit"><option>件</option><option>箱</option><option>个</option><option>套</option></select></div>
+        <div class="form-group"><label>供应商</label><input type="text" id="in-supplier"></div>
+        <button type="submit" class="btn-primary">确认入库</button>
+      </form>
+    </section>
+
+    <section id="outbound" class="card" style="display:none">
+      <h2>物品出库</h2>
+      <form id="outbound-form">
+        <div class="form-group"><label>物品编号</label><input type="text" id="out-code" required></div>
+        <div class="form-group"><label>出库数量</label><input type="number" id="out-quantity" required min="1"></div>
+        <div class="form-group"><label>领用人</label><input type="text" id="out-recipient" required></div>
+        <div class="form-group"><label>用途说明</label><input type="text" id="out-purpose"></div>
+        <button type="submit" class="btn-primary">确认出库</button>
+      </form>
+    </section>
+
+    <section id="inventory" class="card" style="display:none">
+      <h2>库存查询</h2>
+      <div class="form-group"><input type="text" id="search-input" placeholder="搜索物品名称或编号..."></div>
+      <table>
+        <thead><tr><th>编号</th><th>名称</th><th>分类</th><th>数量</th><th>单位</th><th>更新时间</th></tr></thead>
+        <tbody id="inventory-list"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    let inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
+    let records = JSON.parse(localStorage.getItem('records') || '[]');
+
+    function showSection(id) {
+      ['dashboard','inbound','outbound','inventory'].forEach(s => {
+        document.getElementById(s).style.display = s === id ? 'block' : 'none';
+      });
+      if (id === 'inventory') renderInventory();
+      if (id === 'dashboard') updateStats();
+    }
+
+    function updateStats() {
+      const total = inventory.reduce((sum, item) => sum + item.quantity, 0);
+      document.getElementById('total-items').textContent = total;
+      const today = new Date().toDateString();
+      document.getElementById('today-in').textContent = records.filter(r => r.type === 'in' && new Date(r.time).toDateString() === today).length;
+      document.getElementById('today-out').textContent = records.filter(r => r.type === 'out' && new Date(r.time).toDateString() === today).length;
+      document.getElementById('low-stock').textContent = inventory.filter(i => i.quantity < 10).length;
+    }
+
+    document.getElementById('inbound-form').onsubmit = function(e) {
+      e.preventDefault();
+      const item = {
+        code: document.getElementById('in-code').value,
+        name: document.getElementById('in-name').value,
+        category: document.getElementById('in-category').value,
+        quantity: parseInt(document.getElementById('in-quantity').value),
+        unit: document.getElementById('in-unit').value,
+        supplier: document.getElementById('in-supplier').value,
+        time: new Date().toISOString()
+      };
+      const existing = inventory.find(i => i.code === item.code);
+      if (existing) { existing.quantity += item.quantity; existing.time = item.time; }
+      else { inventory.push(item); }
+      records.push({...item, type: 'in'});
+      localStorage.setItem('inventory', JSON.stringify(inventory));
+      localStorage.setItem('records', JSON.stringify(records));
+      alert('入库成功！'); this.reset(); updateStats();
+    };
+
+    document.getElementById('outbound-form').onsubmit = function(e) {
+      e.preventDefault();
+      const code = document.getElementById('out-code').value;
+      const quantity = parseInt(document.getElementById('out-quantity').value);
+      const item = inventory.find(i => i.code === code);
+      if (!item) return alert('物品不存在！');
+      if (item.quantity < quantity) return alert('库存不足！');
+      item.quantity -= quantity; item.time = new Date().toISOString();
+      records.push({ code, quantity, type: 'out', recipient: document.getElementById('out-recipient').value, purpose: document.getElementById('out-purpose').value, time: new Date().toISOString() });
+      localStorage.setItem('inventory', JSON.stringify(inventory));
+      localStorage.setItem('records', JSON.stringify(records));
+      alert('出库成功！'); this.reset(); updateStats();
+    };
+
+    function renderInventory() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      document.getElementById('inventory-list').innerHTML = inventory
+        .filter(i => !search || i.name.toLowerCase().includes(search) || i.code.toLowerCase().includes(search))
+        .map(i => '<tr><td>' + i.code + '</td><td>' + i.name + '</td><td>' + i.category + '</td><td>' + i.quantity + '</td><td>' + i.unit + '</td><td>' + new Date(i.time).toLocaleString() + '</td></tr>')
+        .join('');
+    }
+
+    document.getElementById('search-input').oninput = renderInventory;
+    updateStats();
+  </script>
+</body>
+</html>
